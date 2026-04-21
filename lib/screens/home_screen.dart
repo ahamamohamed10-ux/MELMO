@@ -7,7 +7,7 @@ import 'cart_screen.dart';
 import 'catalog_screen.dart';
 import 'profile_screen.dart';
 import 'product_detail_screen.dart';
-import 'package:ecommerce_app/screens/add_product_screen.dart';
+import 'package:melmo/screens/add_product_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
