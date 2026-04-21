@@ -1,0 +1,53 @@
+name: ecommerce_app
+description: "A new Flutter project for MoMart."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Gestion de l'état et icônes
+  provider: ^6.1.1
+  cupertino_icons: ^1.0.8
+  
+  # Stockage local et utilitaires
+  shared_preferences: ^2.2.2
+  intl: ^0.19.0
+  
+  # Firebase (Backend)
+  firebase_core: ^3.0.0
+  cloud_firestore: ^5.0.0
+  firebase_auth: ^5.0.0
+  firebase_storage: ^12.4.10
+  
+  # Utilitaires divers
+  image_picker: ^1.2.1
+  http: ^1.6.0
+  shimmer: ^3.0.0
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  # ✅ Ajouté pour générer l'icône de l'application sur ton tel
+  flutter_launcher_icons: ^0.13.1
+
+# ✅ Configuration de l'icône de l'application (Logo MoMart)
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#ffffff" # Fond blanc derrière ton caddie orange
+  adaptive_icon_foreground: "assets/images/logo.png"
+
+flutter:
+  uses-material-design: true
+
+  # ✅ Déclaration des assets
+  assets:
+    - assets/images/

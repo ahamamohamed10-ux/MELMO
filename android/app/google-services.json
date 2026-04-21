@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1024396916109",
+    "project_id": "mohamed-app-xyz123",
+    "storage_bucket": "mohamed-app-xyz123.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024396916109:android:2d0818c185e1616e7ab9c4",
+        "android_client_info": {
+          "package_name": "com.example.ecommerce_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFSiyMiNWXpRJI5JAvvxKsn4YF6QO9lL8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024396916109:android:707f346260731bd47ab9c4",
+        "android_client_info": {
+          "package_name": "com.example.my_first_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFSiyMiNWXpRJI5JAvvxKsn4YF6QO9lL8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
