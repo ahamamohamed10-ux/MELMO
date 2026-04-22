@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/cart_provider.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -10,172 +12,212 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  // Clé pour valider le formulaire
   final _formKey = GlobalKey<FormState>();
+  bool _isProcessing = false;
   
-  // Variables pour stocker les saisies
-  String _name = '';
-  String _email = '';
-  String _address = '';
-  String _paymentMethod = 'Carte Bancaire';
+  // Contrôleurs pour lier les données au profil MoMart
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _addressController = TextEditingController();
+  String _paymentMethod = 'Paiement à la livraison';
 
-  void _submitOrder() {
-    // Vérification de la validité du formulaire
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
+  @override
+  void initState() {
+    super.initState();
+    _prefillUserInfo();
+  }
 
-      // 1. On récupère le montant total avant de vider le panier
-      final total = Provider.of<CartProvider>(context, listen: false).totalAmount;
+  // Récupération automatique des infos du profil
+  Future<void> _prefillUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-      // 2. On vide le panier
-      Provider.of<CartProvider>(context, listen: false).clear();
+    _emailController.text = user.email ?? '';
 
-      // 3. Dialogue de confirmation utilisant toutes les variables
-      showDialog(
-        context: context,
-        barrierDismissible: false, // Oblige à cliquer sur le bouton
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 10),
-              Text('Commande validée !'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: [
-                Text('Merci pour votre confiance, $_name !', 
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 15),
-                Text('Un récapitulatif de ${total.toStringAsFixed(2)} € a été envoyé à :'),
-                Text(_email, style: const TextStyle(color: Colors.blue)),
-                const SizedBox(height: 15),
-                const Text('Adresse de livraison :'),
-                Text(_address, style: const TextStyle(fontStyle: FontStyle.italic)),
-                const SizedBox(height: 10),
-                Text('Paiement par : $_paymentMethod'),
-              ],
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                // Retourne à l'écran principal (Home) et vide la pile de navigation
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              child: const Text('Retour à la boutique'),
-            ),
+    try {
+      var userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (userDoc.exists && mounted) {
+        setState(() {
+          _nameController.text = userDoc.data()?['name'] ?? '';
+          _addressController.text = userDoc.data()?['address'] ?? '';
+        });
+      }
+    } catch (e) {
+      debugPrint("Erreur pré-remplissage : $e");
+    }
+  }
+
+  // Soumission de la commande vers Firestore
+  Future<void> _submitOrder() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isProcessing = true);
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final user = FirebaseAuth.instance.currentUser;
+
+    try {
+      // 1. Enregistrement dans la collection 'orders'
+      await FirebaseFirestore.instance.collection('orders').add({
+        'userId': user?.uid,
+        'customerName': _nameController.text.trim(),
+        'customerEmail': _emailController.text.trim(),
+        'deliveryAddress': _addressController.text.trim(),
+        'paymentMethod': _paymentMethod,
+        'items': cart.items.values.map((item) => {
+          'id': item.id,
+          'title': item.title,
+          'price': item.price,
+          'quantity': item.quantity,
+        }).toList(),
+        'totalAmount': cart.totalAmount,
+        'status': 'En attente',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Vider le panier
+      final totalPaye = cart.totalAmount;
+      cart.clear();
+
+      // 3. Dialogue de succès (Vérification mounted pour éviter les erreurs de context)
+      if (mounted) {
+        _showSuccessDialog(totalPaye);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la commande : $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  void _showSuccessDialog(double total) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Column(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 50),
+            SizedBox(height: 10),
+            Text('Commande Validée !'),
           ],
         ),
-      );
-    }
+        content: Text(
+          'Merci pour votre confiance !\nVotre commande de ${total.toStringAsFixed(2)} € est en cours de préparation.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37)),
+              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              child: const Text('RETOUR À LA BOUTIQUE', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Finaliser la commande'),
+        title: const Text('Finaliser la commande', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const Text(
-                'Vos informations',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
+      body: _isProcessing 
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Où devons-nous livrer ?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  
+                  _buildInput(controller: _nameController, label: 'Nom complet', icon: Icons.person),
+                  const SizedBox(height: 15),
+                  _buildInput(controller: _emailController, label: 'Email de contact', icon: Icons.email, type: TextInputType.emailAddress),
+                  const SizedBox(height: 15),
+                  _buildInput(controller: _addressController, label: 'Adresse précise (Ville, Quartier...)', icon: Icons.location_on, lines: 3),
+                  
+                  const SizedBox(height: 30),
+                  const Text('Mode de paiement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 15),
 
-              // Champ Nom
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Nom complet',
-                  prefixIcon: Icon(Icons.person),
-                  border: OutlineInputBorder(),
-                ),
-                textInputAction: TextInputAction.next,
-                validator: (value) => (value == null || value.isEmpty) ? 'Veuillez entrer votre nom' : null,
-                onSaved: (value) => _name = value!,
-              ),
-              const SizedBox(height: 15),
-
-              // Champ Email
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Adresse Email',
-                  prefixIcon: Icon(Icons.email),
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                validator: (value) {
-                  if (value == null || !value.contains('@')) return 'Email invalide (manque @)';
-                  return null;
-                },
-                onSaved: (value) => _email = value!,
-              ),
-              const SizedBox(height: 15),
-
-              // Champ Adresse
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Adresse de livraison',
-                  prefixIcon: Icon(Icons.location_on),
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-                validator: (value) => (value == null || value.length < 10) ? 'Adresse trop courte' : null,
-                onSaved: (value) => _address = value!,
-              ),
-              const SizedBox(height: 25),
-
-              const Text(
-                'Méthode de paiement',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-
-              DropdownButtonFormField<String>(
-  // Remplacement de 'value' par 'initialValue' pour suivre les standards 2026
-  initialValue: _paymentMethod, 
-  decoration: const InputDecoration(
-    border: OutlineInputBorder(),
-    prefixIcon: Icon(Icons.payment),
-  ),
-  items: ['Carte Bancaire', 'PayPal', 'Virement']
-      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-      .toList(),
-  onChanged: (val) {
-    setState(() {
-      _paymentMethod = val!;
-    });
-  },
-),
-
-              const SizedBox(height: 40),
-
-              SizedBox(
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  DropdownButtonFormField<String>(
+                    initialValue: _paymentMethod, // Corrigé : initialValue au lieu de value
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                      prefixIcon: const Icon(Icons.account_balance_wallet, color: Color(0xFFD4AF37)),
+                    ),
+                    items: ['Paiement à la livraison', 'Mobile Money', 'Carte Bancaire']
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (val) => setState(() => _paymentMethod = val!),
                   ),
-                  onPressed: _submitOrder,
-                  child: const Text('Confirmer et Payer', style: TextStyle(fontSize: 18)),
-                ),
+
+                  const SizedBox(height: 40),
+                  
+                  SizedBox(
+                    width: double.infinity,
+                    height: 60,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD4AF37),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        elevation: 4,
+                      ),
+                      onPressed: _submitOrder,
+                      child: const Text(
+                        'CONFIRMER MA COMMANDE', 
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
+  }
+
+  Widget _buildInput({
+    required TextEditingController controller, 
+    required String label, 
+    required IconData icon, 
+    TextInputType type = TextInputType.text, 
+    int lines = 1
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: type,
+      maxLines: lines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFFD4AF37)),
+        filled: true,
+        fillColor: Colors.grey[100],
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+      ),
+      validator: (v) => (v == null || v.isEmpty) ? 'Veuillez remplir ce champ' : null,
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _addressController.dispose();
+    super.dispose();
   }
 }
