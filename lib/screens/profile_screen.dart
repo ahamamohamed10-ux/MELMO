@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 import '../providers/theme_provider.dart';
 import './orders_screen.dart';
 import './admin_orders_screen.dart';
@@ -16,14 +19,15 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
+  String? _profileImageUrl; // Stocke l'URL de l'image ImgBB
   
   final String adminEmail = "ahamamohamed10@gmail.com"; 
-  // On utilise un getter pour toujours avoir l'utilisateur actuel
   User? get user => FirebaseAuth.instance.currentUser;
 
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -40,10 +44,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _nameController.text = doc.data()?['name'] ?? '';
           _phoneController.text = doc.data()?['phone'] ?? '';
           _addressController.text = doc.data()?['address'] ?? '';
+          _profileImageUrl = doc.data()?['photoUrl']; // On récupère l'image enregistrée
         });
       }
     } catch (e) {
       debugPrint("Erreur de chargement : $e");
+    }
+  }
+
+  // --- NOUVELLE FONCTION : IMAGE PICKER + IMGBB ---
+  Future<void> _pickAndUploadImage() async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+    );
+
+    if (pickedFile == null) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      // 1. Préparation de l'envoi vers ImgBB
+      const String apiKey = "4e6ee70986d4cefe4d3ec35327ac2b54"; // 🔑 METS TA CLÉ ICI
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://api.imgbb.com/1/upload?key=$apiKey'),
+      );
+      request.files.add(await http.MultipartFile.fromPath('image', pickedFile.path));
+
+      // 2. Envoi
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        var responseData = await response.stream.bytesToString();
+        var json = jsonDecode(responseData);
+        String newImageUrl = json['data']['url'];
+
+        // 3. Sauvegarde de l'URL dans Firestore
+        await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
+          'photoUrl': newImageUrl,
+        });
+
+        setState(() {
+          _profileImageUrl = newImageUrl;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo mise à jour avec succès !')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Erreur upload ImgBB : $e");
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -111,22 +165,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Stack(
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 50,
-                          backgroundColor: Color(0xFFD4AF37),
+                          backgroundColor: const Color(0xFFD4AF37),
                           child: CircleAvatar(
                             radius: 47,
                             backgroundColor: Colors.white,
-                            child: Icon(Icons.person, size: 50, color: Colors.grey),
+                            // Affiche l'image ImgBB si elle existe, sinon l'icône grise
+                            backgroundImage: _profileImageUrl != null 
+                                ? NetworkImage(_profileImageUrl!) 
+                                : null,
+                            child: _profileImageUrl == null 
+                                ? const Icon(Icons.person, size: 50, color: Colors.grey) 
+                                : null,
                           ),
                         ),
                         Positioned(
                           bottom: 0,
                           right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
-                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                          child: GestureDetector(
+                            onTap: _isSaving ? null : _pickAndUploadImage, // CLIC ICI
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
+                              child: _isSaving 
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                            ),
                           ),
                         ),
                       ],
@@ -209,6 +274,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  // --- WIDGETS DE STYLE (Gardés tels quels) ---
 
   Widget _buildTextField({
     required TextEditingController controller,
