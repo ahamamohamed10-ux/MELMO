@@ -19,7 +19,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
-  String? _profileImageUrl; // Stocke l'URL de l'image ImgBB
+  String? _profileImageUrl; 
   
   final String adminEmail = "ahamamohamed10@gmail.com"; 
   User? get user => FirebaseAuth.instance.currentUser;
@@ -44,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _nameController.text = doc.data()?['name'] ?? '';
           _phoneController.text = doc.data()?['phone'] ?? '';
           _addressController.text = doc.data()?['address'] ?? '';
-          _profileImageUrl = doc.data()?['photoUrl']; // On récupère l'image enregistrée
+          _profileImageUrl = doc.data()?['photoUrl']; // Récupération du lien ImgBB
         });
       }
     } catch (e) {
@@ -52,7 +52,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- NOUVELLE FONCTION : IMAGE PICKER + IMGBB ---
   Future<void> _pickAndUploadImage() async {
     final XFile? pickedFile = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -64,22 +63,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. Préparation de l'envoi vers ImgBB
-      const String apiKey = "4e6ee70986d4cefe4d3ec35327ac2b54"; // 🔑 METS TA CLÉ ICI
+      const String apiKey = "4e6ee70986d4cefe4d3ec35327ac2b54"; 
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('https://api.imgbb.com/1/upload?key=$apiKey'),
       );
       request.files.add(await http.MultipartFile.fromPath('image', pickedFile.path));
 
-      // 2. Envoi
       var response = await request.send();
       if (response.statusCode == 200) {
         var responseData = await response.stream.bytesToString();
         var json = jsonDecode(responseData);
-        String newImageUrl = json['data']['url'];
+        String newImageUrl = json['data']['url']; // Lien direct vers l'image
 
-        // 3. Sauvegarde de l'URL dans Firestore
+        // Mise à jour immédiate dans Firestore pour la photo
         await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
           'photoUrl': newImageUrl,
         });
@@ -106,13 +103,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user!.uid).set({
+      // Correction : On crée un Map pour inclure conditionnellement la photoUrl
+      final Map<String, dynamic> userData = {
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
         'email': user!.email,
         'updatedAt': Timestamp.now(),
-      }, SetOptions(merge: true));
+      };
+
+      // Si une URL d'image existe, on l'ajoute pour ne pas l'effacer
+      if (_profileImageUrl != null) {
+        userData['photoUrl'] = _profileImageUrl;
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .set(userData, SetOptions(merge: true)); // Utilisation de merge pour la sécurité
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,11 +179,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircleAvatar(
                             radius: 47,
                             backgroundColor: Colors.white,
-                            // Affiche l'image ImgBB si elle existe, sinon l'icône grise
-                            backgroundImage: _profileImageUrl != null 
+                            // Correction : On vérifie que l'URL est valide
+                            backgroundImage: (_profileImageUrl != null && _profileImageUrl!.isNotEmpty)
                                 ? NetworkImage(_profileImageUrl!) 
                                 : null,
-                            child: _profileImageUrl == null 
+                            child: (_profileImageUrl == null || _profileImageUrl!.isEmpty)
                                 ? const Icon(Icons.person, size: 50, color: Colors.grey) 
                                 : null,
                           ),
@@ -184,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           bottom: 0,
                           right: 0,
                           child: GestureDetector(
-                            onTap: _isSaving ? null : _pickAndUploadImage, // CLIC ICI
+                            onTap: _isSaving ? null : _pickAndUploadImage,
                             child: Container(
                               padding: const EdgeInsets.all(4),
                               decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
@@ -274,8 +282,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-  // --- WIDGETS DE STYLE (Gardés tels quels) ---
 
   Widget _buildTextField({
     required TextEditingController controller,

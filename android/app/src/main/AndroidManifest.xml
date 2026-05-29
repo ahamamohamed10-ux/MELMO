@@ -1,8 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
     <application
         android:label="MELMO"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -33,7 +39,6 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
@@ -41,6 +46,10 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="whatsapp" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <data android:mimeType="image/*" />
         </intent>
     </queries>
 </manifest>
