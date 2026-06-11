@@ -5,8 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'providers/cart_provider.dart';
 import 'providers/theme_provider.dart';
-import 'screens/home_screen.dart'; // ✅ Un seul import suffit
+import 'providers/navigation_provider.dart'; // <-- 1. AJOUTE CET IMPORT
+import 'screens/home_screen.dart'; 
 import 'screens/auth_screen.dart';
+import 'screens/admin_panel_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +22,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (ctx) => CartProvider()),
         ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
+        ChangeNotifierProvider(create: (ctx) => NavigationProvider()), // <-- 2. AJOUTE-LE ICI
       ],
       child: const MyApp(),
     ),
@@ -67,7 +70,13 @@ class MyApp extends StatelessWidget {
           }
           
           if (userSnapshot.hasData) {
-            return const HomeScreen(); 
+            final user = userSnapshot.data!;
+            
+            if (user.email == 'ahamamohamed10@gmail.com') {
+              return const AdminPanelScreen(); 
+            } else {
+              return const HomeScreen(); 
+            }
           }
           
           return const AuthScreen(); 

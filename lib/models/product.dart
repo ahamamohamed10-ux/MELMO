@@ -1,10 +1,21 @@
+import 'package:flutter/material.dart';
+
+/// Fonction utilitaire pour convertir une chaîne Hexadécimale (ex: "#D4AF37") en objet Color Flutter
+Color hexToColor(String hexString) {
+  final buffer = StringBuffer();
+  if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
+  buffer.write(hexString.replaceFirst('#', ''));
+  return Color(int.parse(buffer.toString(), radix: 16));
+}
+
 class Product {
   final String id;
   final String title;
   final String description;
   final double price;
   final List<String> images;
-  final String category; // L'étiquette pour organiser tes articles
+  final String category; 
+  final List<String> colors; // Liste des codes couleurs Hexadécimaux disponibles
 
   Product({
     required this.id,
@@ -12,7 +23,8 @@ class Product {
     required this.description,
     required this.price,
     required this.images,
-    required this.category, // Ajouté ici
+    required this.category,
+    this.colors = const [], // Par défaut, pas de couleur imposée (ex: les sprays)
   });
 }
 
@@ -28,6 +40,7 @@ final List<Product> demoProducts = [
       'assets/images/bandana2.jpg',
     ],
     category: 'Accessoires',
+    colors: ['#000000', '#FF0000', '#0000FF', '#FFFFFF'], // Noir, Rouge, Bleu, Blanc
   ),
   Product(
     id: '2',
@@ -41,6 +54,7 @@ final List<Product> demoProducts = [
       'https://i.ibb.co/d4F49WZ5/Shell-necklace.jpg',
     ],
     category: 'Bijoux',
+    colors: ['#FFFDD0', '#D4AF37', '#E6E6FA'], // Crème, Doré, Lavande
   ),
   Product(
     id: '3',
@@ -49,6 +63,7 @@ final List<Product> demoProducts = [
     price: 89.50,
     images: ['assets/images/spray_bottle.jpg'],
     category: 'Soin',
+    colors: [], // Pas de couleur pour cet article
   ),
   Product(
     id: 'p1',
@@ -57,6 +72,7 @@ final List<Product> demoProducts = [
     price: 85.0,
     images: ['assets/images/cap_fachion.jpg'],
     category: 'Vêtements',
+    colors: ['#D4AF37', '#000000', '#800020'], // Doré, Noir, Bourgogne
   ),
   Product(
     id: 'p2',
@@ -65,6 +81,7 @@ final List<Product> demoProducts = [
     price: 45.0,
     images: ['assets/images/sacoche_men.jpg'],
     category: 'Accessoires',
+    colors: ['#8B4513', '#000000', '#A0522D'], // Marron, Noir, Cuir sienne
   ),
   Product(
     id: 'p3',
@@ -73,6 +90,7 @@ final List<Product> demoProducts = [
     price: 30.0,
     images: ['assets/images/lunette_soille.jpg'],
     category: 'Accessoires',
+    colors: ['#000000', '#D4AF37', '#8B4513'], // Noir, Doré, Écaille
   ),
   Product(
     id: 'p4',
@@ -81,6 +99,7 @@ final List<Product> demoProducts = [
     price: 30.0,
     images: ['assets/images/men_boots.jpg'],
     category: 'Chaussures',
+    colors: ['#000000', '#8B4513'], // Noir, Brun
   ),
   Product(
     id: 'p5',
@@ -91,5 +110,6 @@ final List<Product> demoProducts = [
       'https://i.ibb.co/mFJzNMk6/1-Pcs-500-ml-17-oz-Empty-Plastic-Spray-Bottles-Refillable-Adjustable-Mist-Sprayer-Bottles-for.jpg',
     ],
     category: 'Soin',
+    colors: [],
   ),
 ];

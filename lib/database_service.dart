@@ -40,12 +40,14 @@ class DatabaseService {
     return urls;
   }
 
+  // --- MÉTHODE MISE À JOUR AVEC LE PARAMÈTRE COLORS ---
   Future<void> addProduct({
     required String name,
     required double price,
     required String description,
     required List<String> imageUrls,
     required String category,
+    List<String> colors = const [], // <-- AJOUTÉ : Paramètre de liste optionnel (vide par défaut)
   }) async {
     try {
       await _db.collection('products').add({
@@ -55,6 +57,7 @@ class DatabaseService {
         'description': description,
         'images': imageUrls.isNotEmpty ? imageUrls : ['https://via.placeholder.com/150'],
         'category': category,
+        'colors': colors, // <-- AJOUTÉ : Enregistrement de ta liste de variantes sur Firestore !
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // AJOUTÉ
+import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../screens/product_detail_screen.dart';
-import '../providers/cart_provider.dart'; // AJOUTÉ
+import '../providers/cart_provider.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -12,7 +12,7 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // On récupère la première image de la liste pour l'aperçu
-    final String coverImage = product.images.isNotEmpty ? product.images[0] : '';
+    final String coverImage = product.images.isNotEmpty ? product.images[0].trim() : '';
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
@@ -49,24 +49,30 @@ class ProductCard extends StatelessWidget {
           '${product.price.toStringAsFixed(2)} €',
           style: TextStyle(color: Theme.of(context).primaryColor),
         ),
-        // --- MODIFICATION : Remplacement de la flèche par un bouton panier ---
+        // --- MODIFICATION APPLIQUÉE ICI AVEC LE 5ÈME ARGUMENT COULEUR ---
         trailing: IconButton(
           icon: Icon(Icons.add_shopping_cart, color: Theme.of(context).primaryColor),
           onPressed: () {
-            // On envoie les 4 infos nécessaires au CartProvider
+            // Détermination de la couleur par défaut à envoyer
+            final String defaultColor = product.colors.isNotEmpty ? product.colors.first : "Standard";
+
+            // On envoie les 5 arguments attendus par ton nouveau CartProvider
             Provider.of<CartProvider>(context, listen: false).addItem(
               product.id,
               product.price,
               product.title,
               coverImage,
+              defaultColor, // <-- CORRIGÉ : Prend la couleur ou "Standard" au lieu de 1
             );
 
-            // Petit message de confirmation
+            // Petit message de confirmation incluant la variante
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('${product.title} ajouté au panier !'),
+                content: Text('${product.title} ($defaultColor) ajouté au panier !'),
                 duration: const Duration(seconds: 2),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
               ),
             );
           },

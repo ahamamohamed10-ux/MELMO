@@ -2,14 +2,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
-// Modèle interne pour le panier
+// Modèle interne pour le panier mis à jour avec les couleurs
 class CartItemData {
-  final String id;
+  final String id; // ID unique de la ligne (productId_selectedColor)
   final String title;
   final String imageUrl;
   final double price;
   final int quantity;
+  final String selectedColor; // <-- AJOUTÉ : Sauvegarde de la couleur hexadécimale
 
   CartItemData({
     required this.id,
@@ -17,6 +17,7 @@ class CartItemData {
     required this.imageUrl,
     required this.price,
     required this.quantity,
+    required this.selectedColor, // <-- Requis
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +26,7 @@ class CartItemData {
         'imageUrl': imageUrl,
         'price': price,
         'quantity': quantity,
+        'selectedColor': selectedColor, // <-- Sauvegarde dans SharedPreferences
       };
 
   factory CartItemData.fromJson(Map<String, dynamic> json) => CartItemData(
@@ -33,6 +35,7 @@ class CartItemData {
         imageUrl: json['imageUrl'] ?? '',
         price: (json['price'] as num).toDouble(),
         quantity: json['quantity'],
+        selectedColor: json['selectedColor'] ?? 'Standard', // Valeur par défaut si absent
       );
 }
 
@@ -55,7 +58,7 @@ class CartProvider with ChangeNotifier {
 
   int get itemCount => _items.length;
 
-  // --- SAUVEGARDE ---
+  // --- SAUVEGARDE EN LOCAL ---
   Future<void> _saveCartData() async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, dynamic> tempMap = {};
@@ -66,7 +69,7 @@ class CartProvider with ChangeNotifier {
     await prefs.setString('user_cart', cartJson);
   }
 
-  // --- CHARGEMENT ---
+  // --- CHARGEMENT DE LA MÉMOIRE LOCALE ---
   Future<void> _loadCartData() async {
     final prefs = await SharedPreferences.getInstance();
     if (!prefs.containsKey('user_cart')) return;
@@ -80,64 +83,79 @@ class CartProvider with ChangeNotifier {
     }
   }
 
-  // --- MÉTHODES DE GESTION CORRIGÉES ---
+  // --- AJOUT D'UN ARTICLE MODIFIÉ AVEC LA COULEUR ---
+  void addItem(String productId, double price, String title, String imageUrl, String colorHex) {
+    // Génération d'une clé unique combinant l'article et sa variante couleur
+    final String cartItemId = "${productId}_$colorHex";
 
-  void addItem(String productId, double price, String title, String imageUrl) {
-    if (_items.containsKey(productId)) {
+    if (_items.containsKey(cartItemId)) {
+      // Si la même variante de couleur existe, on incrémente
       _items.update(
-          productId,
+          cartItemId,
           (existing) => CartItemData(
                 id: existing.id,
                 title: existing.title,
                 imageUrl: existing.imageUrl,
                 price: existing.price,
                 quantity: existing.quantity + 1,
+                selectedColor: existing.selectedColor,
               ));
     } else {
-      _items[productId] = CartItemData(
-        id: productId,
+      // Sinon, on crée une nouvelle ligne distincte pour cette couleur
+      _items[cartItemId] = CartItemData(
+        id: cartItemId,
         title: title,
         imageUrl: imageUrl,
         price: price,
         quantity: 1,
+        selectedColor: colorHex,
       );
     }
     _saveCartData();
     notifyListeners();
   }
 
-  void incrementQuantity(String productId) {
-    if (_items.containsKey(productId)) {
-      final item = _items[productId]!;
-      addItem(productId, item.price, item.title, item.imageUrl);
+  // --- INCREMENTATION VIA L'ID DE LIGNE UNIQUE ---
+  void incrementQuantity(String cartItemId) {
+    if (_items.containsKey(cartItemId)) {
+      final item = _items[cartItemId]!;
+      // Extraction de l'ID produit d'origine (ce qui se trouve avant le '_')
+      final productId = cartItemId.split('_')[0];
+      
+      addItem(productId, item.price, item.title, item.imageUrl, item.selectedColor);
     }
   }
 
-  void decrementQuantity(String productId) {
-    if (!_items.containsKey(productId)) return;
-    if (_items[productId]!.quantity > 1) {
+  // --- DECREMENTATION ---
+  void decrementQuantity(String cartItemId) {
+    if (!_items.containsKey(cartItemId)) return;
+    
+    if (_items[cartItemId]!.quantity > 1) {
       _items.update(
-          productId,
+          cartItemId,
           (existing) => CartItemData(
                 id: existing.id,
                 title: existing.title,
                 imageUrl: existing.imageUrl,
                 price: existing.price,
                 quantity: existing.quantity - 1,
+                selectedColor: existing.selectedColor,
               ));
     } else {
-      _items.remove(productId);
+      _items.remove(cartItemId);
     }
     _saveCartData();
     notifyListeners();
   }
 
-  void removeItem(String productId) {
-    _items.remove(productId);
+  // --- SUPPRESSION ---
+  void removeItem(String cartItemId) {
+    _items.remove(cartItemId);
     _saveCartData();
     notifyListeners();
   }
 
+  // --- VIDER LE PANIER ---
   void clear() {
     _items.clear();
     _saveCartData();

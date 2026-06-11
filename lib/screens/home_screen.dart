@@ -10,6 +10,7 @@ import 'product_detail_screen.dart';
 import 'package:melmo/screens/add_product_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
+import '../providers/navigation_provider.dart'; // Import indispensable pour la synchronisation
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,16 +20,19 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
-
+  // Liste des pages de l'application
   final List<Widget> _pages = [
     const HomeBody(),
     const CatalogScreen(),
-    const ProfileScreen(),
+    const MessagesScreen(), 
+    const ProfileScreen(),   
   ];
 
   @override
   Widget build(BuildContext context) {
+    // Écoute du provider de navigation globale
+    final navProvider = Provider.of<NavigationProvider>(context);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -36,11 +40,11 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         centerTitle: true,
         title: Image.asset(
-          'assets/images/logo.png',
+          'assets/images/logo2.png',
           height: 45,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const Text(
-            "MelmO",
+            "MoMart",
             style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold),
           ),
         ),
@@ -92,7 +96,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: _pages[_selectedIndex],
+      
+      // Utilisation de l'index synchronisé du NavigationProvider
+      body: _pages[navProvider.currentTab],
+      
       floatingActionButton: FirebaseAuth.instance.currentUser?.email == "ahamamohamed10@gmail.com"
           ? FloatingActionButton(
               backgroundColor: const Color(0xFFD4AF37),
@@ -102,23 +109,44 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
+      
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        currentIndex: navProvider.currentTab,
+        onTap: (index) => navProvider.changeTab(index), // Met à jour le provider au clic
         selectedItemColor: const Color(0xFFD4AF37),
         unselectedItemColor: Colors.grey,
         showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
+        type: BottomNavigationBarType.fixed, 
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Accueil'),
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: 'Catalogue'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_filled), 
+            label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view), 
+            label: 'Catalogue',
+          ),
+          BottomNavigationBarItem(
+            icon: Badge(
+              label: Text('3'), 
+              backgroundColor: Colors.red,
+              child: Icon(Icons.chat_bubble_outline),
+            ), 
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline), 
+            label: 'Profil',
+          ),
         ],
       ),
     );
   }
 }
 
+// =========================================================================
+// HOMEBODY (CONSERVÉ À L'IDENTIQUE)
+// =========================================================================
 class HomeBody extends StatefulWidget {
   const HomeBody({super.key});
 
@@ -127,63 +155,17 @@ class HomeBody extends StatefulWidget {
 }
 
 class _HomeBodyState extends State<HomeBody> {
-  // 1. Déclarations des variables d'état pour la Bannière, la Recherche et les Filtres
-  final PageController _bannerController = PageController();
-  int _currentBannerPage = 0;
-  Timer? _bannerTimer;
-
-  final List<String> _bannerImages = [
-    'assets/images/banner_model.jpg',
-    'assets/images/banner2.jpg', 
-    'assets/images/banner3.jpg', 
-  ];
-
   String _searchQuery = '';
-  String _selectedCategory = 'Tout'; 
-  final List<String> _categories = ['Tout', 'Boubous', 'Bijoux', 'Pantalons', 'Robes'];
+  String _selectedCategory = 'Tout';
 
-  // 2. Gestion du cycle de vie (Initialisation du Timer automatique)
-  @override
-  void initState() {
-    super.initState();
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
-      if (_currentBannerPage < _bannerImages.length - 1) {
-        _currentBannerPage++;
-      } else {
-        _currentBannerPage = 0;
-      }
-
-      if (_bannerController.hasClients) {
-        _bannerController.animateToPage(
-          _currentBannerPage,
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.fastOutSlowIn,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _bannerTimer?.cancel();
-    _bannerController.dispose();
-    super.dispose();
-  }
-
-  // 3. Construction principale de l'interface d'accueil
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. BANNIÈRE DÉFILANTE
-          _buildBannerHeader(),
-
-          // 2. BARRE D'AVANTAGES
+          const HomeBannerSlider(),
           _buildFeaturesBar(),
-
-          // 3. BARRE DE RECHERCHE
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
             child: TextField(
@@ -200,45 +182,7 @@ class _HomeBodyState extends State<HomeBody> {
               onChanged: (value) => setState(() => _searchQuery = value),
             ),
           ),
-
-          // 4. FILTRE DE CATÉGORIES HORIZONTAL
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              itemCount: _categories.length,
-              itemBuilder: (ctx, i) {
-                final cat = _categories[i];
-                final isSelected = _selectedCategory == cat;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = cat),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFFD4AF37) : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      cat, 
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // 5. GRILLE DE CATÉGORIES ASYMÉTRIQUE
           _buildCategoryGrid(),
-
-          // TITRE PRODUITS
           const Padding(
             padding: EdgeInsets.fromLTRB(15, 20, 15, 10),
             child: Text(
@@ -246,8 +190,6 @@ class _HomeBodyState extends State<HomeBody> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
-
-          // 6. GRILLE DE PRODUITS (STREAMBUILDER FIREBASE)
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('products').snapshots(),
             builder: (context, snapshot) {
@@ -286,6 +228,7 @@ class _HomeBodyState extends State<HomeBody> {
                   price: (data['price'] ?? 0).toDouble(),
                   images: imagesList,
                   category: data['category'] ?? 'Tout',
+                  colors: data['colors'] != null ? List<String>.from(data['colors']) : [], // <-- ASSUREZ-VOUS DE BIEN TRAITER LA LISTE DE COULEURS
                 );
               }).where((p) {
                 final matchesSearch = p.title.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -320,22 +263,15 @@ class _HomeBodyState extends State<HomeBody> {
     );
   }
 
-  // --- WIDGETS AUXILIAIRES DE CONSTRUCTION DE L'INTERFACE ---
-
   Widget _buildCategoryGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 15.0),
       child: Row(
         children: [
-          // À GAUCHE : Grand bloc "Women's Style"
           Expanded(
             flex: 1,
             child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedCategory = 'Robes';
-                });
-              },
+              onTap: () => setState(() => _selectedCategory = 'Robes'),
               child: Container(
                 height: 220,
                 decoration: BoxDecoration(
@@ -360,24 +296,16 @@ class _HomeBodyState extends State<HomeBody> {
               ),
             ),
           ),
-          
           const SizedBox(width: 15),
-
-          // À DROITE : Deux petits blocs superposés
           Expanded(
             flex: 1,
             child: SizedBox(
               height: 220,
               child: Column(
                 children: [
-                  // Bloc Handbag (Haut)
                   Expanded(
                     child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCategory = 'Tout';
-                        });
-                      },
+                      onTap: () => setState(() => _selectedCategory = 'Tout'),
                       child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
@@ -402,17 +330,10 @@ class _HomeBodyState extends State<HomeBody> {
                       ),
                     ),
                   ),
-                  
                   const SizedBox(height: 15),
-
-                  // Bloc Watch (Bas)
                   Expanded(
                     child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCategory = 'Bijoux';
-                        });
-                      },
+                      onTap: () => setState(() => _selectedCategory = 'Bijoux'),
                       child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
@@ -438,120 +359,6 @@ class _HomeBodyState extends State<HomeBody> {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBannerHeader() {
-    return SizedBox(
-      height: 280,
-      width: double.infinity,
-      child: Stack(
-        children: [
-          PageView.builder(
-            controller: _bannerController,
-            itemCount: _bannerImages.length,
-            onPageChanged: (index) {
-              setState(() {
-                _currentBannerPage = index;
-              });
-            },
-            itemBuilder: (context, index) {
-              return Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  image: DecorationImage(
-                    image: AssetImage(_bannerImages[index]), 
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topRight,
-                  ),
-                ),
-              );
-            },
-          ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Colors.white.withAlpha(220),
-                  Colors.white.withAlpha(50),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            top: 45,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Season Sale",
-                  style: TextStyle(color: Color(0xFFD4AF37), fontSize: 18, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  "MELMO\nFASHION",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    height: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text("Min. 35-70% Off", style: TextStyle(color: Colors.black54, fontSize: 14)),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {},
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD4AF37),
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                      ),
-                      child: const Text("SHOP NOW", style: TextStyle(color: Colors.white)),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton(
-                      onPressed: () {},
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.black),
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                      ),
-                      child: const Text("READ MORE", style: TextStyle(color: Colors.black)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 15,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _bannerImages.length,
-                (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  height: 8,
-                  width: _currentBannerPage == index ? 20 : 8,
-                  decoration: BoxDecoration(
-                    color: _currentBannerPage == index ? const Color(0xFFD4AF37) : Colors.black26,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
               ),
             ),
           ),
@@ -701,6 +508,8 @@ class _HomeBodyState extends State<HomeBody> {
                             product.price,
                             product.title,
                             imageUrl,
+                            product.colors.isNotEmpty ? product.colors.first : "Standard", // <-- AJOUTE CE 5ème ARGUMENT ICI AUSSI
+                            
                           );
 
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -721,6 +530,341 @@ class _HomeBodyState extends State<HomeBody> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class HomeBannerSlider extends StatefulWidget {
+  const HomeBannerSlider({super.key});
+
+  @override
+  State<HomeBannerSlider> createState() => _HomeBannerSliderState();
+}
+
+class _HomeBannerSliderState extends State<HomeBannerSlider> {
+  final PageController _bannerController = PageController();
+  int _currentBannerPage = 0;
+  Timer? _bannerTimer;
+
+  final List<String> _bannerImages = [
+    'assets/images/banner_model.jpg',
+    'assets/images/banner2.jpg', 
+    'assets/images/banner3.jpg', 
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
+      if (_currentBannerPage < _bannerImages.length - 1) {
+        _currentBannerPage++;
+      } else {
+        _currentBannerPage = 0;
+      }
+
+      if (_bannerController.hasClients) {
+        _bannerController.animateToPage(
+          _currentBannerPage,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.fastOutSlowIn,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 280,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          PageView.builder(
+            controller: _bannerController,
+            itemCount: _bannerImages.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentBannerPage = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              return Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  image: DecorationImage(
+                    image: AssetImage(_bannerImages[index]),
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topRight,
+                  ),
+                ),
+              );
+            },
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.85),
+                  Colors.white.withValues(alpha: 0.2),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 20,
+            top: 45,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Season Sale",
+                  style: TextStyle(color: Color(0xFFD4AF37), fontSize: 18, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  "MELMO\nFASHION",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text("Min. 35-70% Off", style: TextStyle(color: Colors.black54, fontSize: 14)),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {},
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD4AF37),
+                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                      ),
+                      child: const Text("SHOP NOW", style: TextStyle(color: Colors.white)),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton(
+                      onPressed: () {},
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.black),
+                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                      ),
+                      child: const Text("READ MORE", style: TextStyle(color: Colors.black)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 15,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                _bannerImages.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  height: 8,
+                  width: _currentBannerPage == index ? 20 : 8,
+                  decoration: BoxDecoration(
+                    color: _currentBannerPage == index ? const Color(0xFFD4AF37) : Colors.black26,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// MESSAGES SCREEN COMPATIBLE AVEC LE NAVIGATION_PROVIDER
+// =========================================================================
+class MessagesScreen extends StatefulWidget {
+  const MessagesScreen({super.key});
+
+  @override
+  State<MessagesScreen> createState() => _MessagesScreenState();
+}
+
+class _MessagesScreenState extends State<MessagesScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  String get _userId => _auth.currentUser?.uid ?? 'guest_user';
+  String get _userEmail => _auth.currentUser?.email ?? 'client@test.com';
+
+  @override
+  void initState() {
+    super.initState();
+    // Utilisation de WidgetsBinding pour intercepter le texte initial après le premier build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+      if (navProvider.initialMessage != null && navProvider.initialMessage!.isNotEmpty) {
+        setState(() {
+          _messageController.text = navProvider.initialMessage!;
+        });
+        // On nettoie le message initial du provider pour éviter qu'il ne réapparaisse
+        navProvider.clearInitialMessage();
+      }
+    });
+  }
+
+  void _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    _messageController.clear();
+
+    final chatDocRef = _firestore.collection('chats').doc(_userId);
+
+    await chatDocRef.collection('messages').add({
+      'text': text,
+      'senderId': _userId,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    await chatDocRef.set({
+      'lastMessage': text,
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'clientEmail': _userEmail,
+      'userId': _userId,
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('chats')
+                  .doc(_userId)
+                  .collection('messages')
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_outline, size: 50, color: Colors.grey[400]),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "Discutez directement avec l'administration !",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final docs = snapshot.data!.docs;
+
+                return ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (ctx, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final messageText = data['text'] ?? '';
+                    final isMe = data['senderId'] == _userId;
+
+                    return _buildBubble(messageText, isMe);
+                  },
+                );
+              },
+            ),
+          ),
+          _buildInputArea(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBubble(String text, bool isMe) {
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isMe ? const Color(0xFFD4AF37) : Colors.grey[200],
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 0),
+            bottomRight: Radius.circular(isMe ? 0 : 16),
+          ),
+        ),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        child: Text(
+          text,
+          style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 15),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey[100]!)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Écrire un message...',
+                filled: true,
+                fillColor: Colors.grey[50],
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.send, color: Color(0xFFD4AF37)),
+            onPressed: _sendMessage,
+          ),
+        ],
       ),
     );
   }

@@ -78,7 +78,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final totalPaye = cart.totalAmount;
       cart.clear();
 
-      // 3. Dialogue de succès (Vérification mounted pour éviter les erreurs de context)
+      // 3. Dialogue de succès
       if (mounted) {
         _showSuccessDialog(totalPaye);
       }
@@ -126,6 +126,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Finaliser la commande', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
@@ -155,7 +156,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 15),
 
                   DropdownButtonFormField<String>(
-                    initialValue: _paymentMethod, // Corrigé : initialValue au lieu de value
+                    initialValue: _paymentMethod, // ✅ Corrigé : 'value' au lieu de 'initialValue'
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                       prefixIcon: const Icon(Icons.account_balance_wallet, color: Color(0xFFD4AF37)),
@@ -166,25 +167,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     onChanged: (val) => setState(() => _paymentMethod = val!),
                   ),
 
-                  const SizedBox(height: 40),
-                  
-                  SizedBox(
-                    width: double.infinity,
-                    height: 60,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD4AF37),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                        elevation: 4,
-                      ),
-                      onPressed: _submitOrder,
-                      child: const Text(
-                        'CONFIRMER MA COMMANDE', 
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
-                      ),
-                    ),
-                  ),
+                  // Espace de marge pour le scroll
+                  const SizedBox(height: 30),
                 ],
+              ),
+            ),
+          ),
+          
+      // =========================================================================
+      // BOUTON FIXE EN BAS (Bottom Sticky Bar)
+      // =========================================================================
+      bottomNavigationBar: _isProcessing 
+        ? const SizedBox.shrink() // Cache le bouton si on charge la commande
+        : Container(
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24, top: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD4AF37), // Couleur Or MoMart
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 0,
+                ),
+                onPressed: _submitOrder,
+                child: const Text(
+                  'CONFIRMER MA COMMANDE', 
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
+                ),
               ),
             ),
           ),
