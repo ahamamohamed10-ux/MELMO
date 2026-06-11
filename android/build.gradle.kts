@@ -15,8 +15,21 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
+// ✅ Remplacement sécurisé et correction forcée des dépendances comme fluttertoast
 subprojects {
-    project.evaluationDependsOn(":app")
+    afterEvaluate {
+        val subproject = this
+        if (subproject.plugins.hasPlugin("com.android.library") || subproject.plugins.hasPlugin("com.android.application")) {
+            val androidExtension = subproject.extensions.findByName("android") as? com.android.build.api.dsl.CommonExtension<*, *, *, *, *, *>
+            androidExtension?.apply {
+                compileSdk = 36
+                defaultConfig {
+                    minSdk = 24
+                }
+            }
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {

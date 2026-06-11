@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart' as gsign;
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -9,19 +11,63 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  // Contrôleurs pour récupérer le texte saisi
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   
-  bool _isLoading = false; // Affiche le cercle de chargement
-  bool _isLogin = true;    // Alterne entre Connexion et Inscription
+  // ✅ Instanciation dynamique pure
+  final dynamic _googleSignIn = gsign.GoogleSignIn();
+  
+  bool _isLoading = false; 
+  bool _isLogin = true;    
 
-  // Fonction principale de connexion/inscription
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final dynamic googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final dynamic googleAuth = await googleUser.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null && mounted) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'uid': user.uid,
+          'email': user.email,
+          'name': user.displayName ?? 'Utilisateur MELMO',
+          'role': 'client',
+          'createdAt': FieldValue.serverTimestamp(),
+          'phoneNumber': user.phoneNumber ?? '',
+        }, SetOptions(merge: true));
+      }
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Échec de la connexion Google : $e"),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _submit() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // Vérification de base
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Veuillez remplir tous les champs")),
@@ -33,23 +79,17 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isLogin) {
-        // Connexion avec Firebase
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
       } else {
-        // Inscription avec Firebase
         await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
       }
-      // Note : Le StreamBuilder dans main.dart détectera le changement 
-      // et chargera automatiquement l'écran d'accueil.
-
     } on FirebaseAuthException catch (e) {
-      // ✅ CORRECTION : Vérifie si l'écran est toujours là avant d'utiliser le context
       if (!mounted) return;
 
       String message = "Une erreur est survenue";
@@ -66,14 +106,12 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       );
     } finally {
-      // ✅ CORRECTION : Vérifie si l'écran est toujours là avant de changer l'état
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   void dispose() {
-    // Nettoyage de la mémoire
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -81,17 +119,16 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLightTheme = Theme.of(context).brightness == Brightness.light;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).brightness == Brightness.light 
-          ? Colors.grey[100] 
-          : Colors.grey[900],
+      backgroundColor: isLightTheme ? Colors.grey[100] : Colors.grey[900],
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo ou Icône de la boutique
               const Icon(Icons.shopping_bag_outlined, size: 100, color: Color(0xFFD4AF37)),
               const SizedBox(height: 15),
               Text(
@@ -100,7 +137,6 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 40),
               
-              // Champ Email
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -112,7 +148,6 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 16),
               
-              // Champ Mot de passe
               TextField(
                 controller: _passwordController,
                 decoration: const InputDecoration(
@@ -124,10 +159,9 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 30),
 
-              // Bouton d'action
               if (_isLoading)
                 const CircularProgressIndicator()
-              else
+              else ...[
                 ElevatedButton(
                   onPressed: _submit,
                   style: ElevatedButton.styleFrom(
@@ -141,10 +175,56 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
+                
+                const SizedBox(height: 16),
+                
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey.shade400, thickness: 1)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text("OU", style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey.shade400, thickness: 1)),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+
+                OutlinedButton(
+                  onPressed: _signInWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 55),
+                    side: BorderSide(color: Colors.grey.shade400, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.network(
+                        'https://developers.google.com/static/images/development-core/identity/sign-in/g-logo.png',
+                        height: 22,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(Icons.account_circle, size: 22, color: Colors.grey);
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        _isLogin ? 'Continuer avec Google' : 'S\'inscrire avec Google',
+                        style: TextStyle(
+                          fontSize: 15, 
+                          color: isLightTheme ? Colors.black87 : Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 15),
 
-              // Lien pour changer de mode
               TextButton(
                 onPressed: () => setState(() => _isLogin = !_isLogin),
                 child: Text(

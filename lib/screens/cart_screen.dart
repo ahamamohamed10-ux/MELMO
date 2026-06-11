@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart'; 
+import 'package:uuid/uuid.dart'; 
+import 'package:flutterwave_standard/flutterwave.dart';
 import '../providers/cart_provider.dart';
+// 🟢 Importation de ton nouveau service M-Pesa
+import '../services/mpesa_service.dart'; 
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -13,61 +16,86 @@ class CartScreen extends StatelessWidget {
     final cartItemIds = cart.items.keys.toList();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFDFBF7), 
       appBar: AppBar(
-        title: const Text('Mon Panier MoMart'),
-        backgroundColor: Colors.white,
+        title: const Text(
+          'Mon Panier MoMart', 
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+        ),
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
       body: Column(
         children: [
-          // Liste des produits dans le panier
           Expanded(
             child: cartItemIds.isEmpty
-                ? const Center(child: Text('Votre panier est vide 🛒'))
+                ? const Center(child: Text('Votre panier est vide 🛒', style: TextStyle(fontSize: 16)))
                 : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     itemCount: cartItemIds.length,
                     itemBuilder: (ctx, i) {
                       final prodId = cartItemIds[i];
                       final cartData = cart.items[prodId]!;
 
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        child: ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: SizedBox(
-                              width: 50,
-                              height: 50,
-                              child: cartData.imageUrl.startsWith('http')
-                                  ? Image.network(cartData.imageUrl, fit: BoxFit.cover)
-                                  : Image.asset(cartData.imageUrl, fit: BoxFit.cover),
+                        elevation: 0.5,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        color: const Color(0xFFF7F0E6), 
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: SizedBox(
+                                width: 55,
+                                height: 55,
+                                child: cartData.imageUrl.startsWith('http')
+                                    ? Image.network(cartData.imageUrl, fit: BoxFit.cover)
+                                    : Image.asset(cartData.imageUrl, fit: BoxFit.cover),
+                              ),
                             ),
-                          ),
-                          title: Text(cartData.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline, color: Colors.orange),
-                                onPressed: () => cart.decrementQuantity(prodId),
+                            title: Text(
+                              cartData.title, 
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => cart.decrementQuantity(prodId),
+                                    child: const Icon(Icons.remove_circle_outline, color: Colors.orange, size: 24),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    child: Text(
+                                      '${cartData.quantity}', 
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () => cart.incrementQuantity(prodId),
+                                    child: const Icon(Icons.add_circle_outline, color: Colors.green, size: 24),
+                                  ),
+                                ],
                               ),
-                              Text('${cartData.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              IconButton(
-                                icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                                onPressed: () => cart.incrementQuantity(prodId),
-                              ),
-                            ],
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('${(cartData.price * cartData.quantity).toStringAsFixed(2)} €'),
-                              const SizedBox(height: 4),
-                              GestureDetector(
-                                onTap: () => cart.removeItem(prodId),
-                                child: const Icon(Icons.delete_outline, color: Colors.red),
-                              ),
-                            ],
+                            ),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${(cartData.price * cartData.quantity).toStringAsFixed(2)} €',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                ),
+                                GestureDetector(
+                                  onTap: () => cart.removeItem(prodId),
+                                  child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -75,30 +103,37 @@ class CartScreen extends StatelessWidget {
                   ),
           ),
           
-          // Zone du Total et Bouton de validation
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration( // Ajout du const ici pour corriger l'erreur
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
+            decoration: const BoxDecoration(
               color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
               boxShadow: [
-                BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -5))
+                BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, -4))
               ],
             ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text(
-                      '${cart.totalAmount.toStringAsFixed(2)} €',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFD4AF37)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                OrderButton(cart: cart),
-              ],
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      Text(
+                        '${cart.totalAmount.toStringAsFixed(2)} €',
+                        style: const TextStyle(
+                          fontSize: 22, 
+                          fontWeight: FontWeight.bold, 
+                          color: Color(0xFFD4AF37), 
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  OrderButton(cart: cart), 
+                ],
+              ),
             ),
           ),
         ],
@@ -117,40 +152,155 @@ class OrderButton extends StatefulWidget {
 
 class _OrderButtonState extends State<OrderButton> {
   var _isLoading = false;
+  final MpesaService _mpesaService = MpesaService(); // 🟢 Instance de ton service
 
-  // --- ENVOI VERS WHATSAPP ---
-  Future<void> _sendToWhatsApp(Map<String, dynamic>? userData, String address) async {
-    const String numero = "254792891643"; // Ton numéro configuré
-    
-    String message = "🚀 *Nouvelle Commande MoMart*\n\n";
-    message += "Client: ${userData?['name'] ?? 'Inconnu'}\n";
-    message += "Adresse: $address\n\n";
-    message += "Articles :\n";
-    
-    // Boucle for recommandée par Dart pour la performance
-    for (var item in widget.cart.items.values) {
-      message += "• ${item.title} (x${item.quantity}) - ${(item.price * item.quantity).toStringAsFixed(2)} €\n";
-    }
-    
-    message += "\n*Total à payer : ${widget.cart.totalAmount.toStringAsFixed(2)} €*";
-
-    final Uri url = Uri.parse("https://wa.me/$numero?text=${Uri.encodeComponent(message)}");
-    
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      debugPrint("Erreur WhatsApp: $e");
-    }
+  /// 🟢 MODIFICATION : Affiche une feuille de choix pour le mode de paiement
+  void _showPaymentSelection(Map<String, dynamic> userData, String address) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Choisir le mode de paiement",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 15),
+              // Option 1 : M-Pesa Direct via Cloud Functions
+              ListTile(
+                leading: const Icon(Icons.phone_android, color: Colors.green, size: 28),
+                title: const Text("M-Pesa Express (STK Push)", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text("Pop-up automatique sur votre téléphone"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleMpesaDirectPayment(userData, address);
+                },
+              ),
+              const Divider(),
+              // Option 2 : Flutterwave (Cartes, etc.)
+              ListTile(
+                leading: const Icon(Icons.credit_card, color: Color(0xFFD4AF37), size: 28),
+                title: const Text("Carte bancaire / Autres via Flutterwave"),
+                subtitle: const Text("Visa, Mastercard, Airtel Money"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _handleFlutterwavePayment(userData, address);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  // --- ENREGISTREMENT FIREBASE + APPEL WHATSAPP ---
-  Future<void> _processOrder() async {
+  /// 🟢 NOUVEAU : Traitement direct M-Pesa via ta Firebase Cloud Function
+  Future<void> _handleMpesaDirectPayment(Map<String, dynamic> userData, String address) async {
     setState(() => _isLoading = true);
+    final String cleanPhone = (userData['phone'] ?? "").toString().replaceAll('+', '').trim();
+
+    if (cleanPhone.isEmpty) {
+      _showErrorSnackBar("Numéro de téléphone requis pour M-Pesa.");
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // Le montant converti en entier (par exemple pour l'API)
+    final int amountAsInt = widget.cart.totalAmount.round();
+
+    final result = await _mpesaService.initierPaiement(
+      phoneNumber: cleanPhone, // Format attendu : 2547XXXXXXXX
+      amount: amountAsInt > 0 ? amountAsInt : 1,
+    );
+
+    if (result['success'] == true) {
+      final String transactionRef = const Uuid().v4();
+      await _saveOrderToFirebase(userData, address, transactionRef, "M-Pesa Direct (Cloud Function)");
+      
+      if (!mounted) return;
+      widget.cart.clear(); 
+      _showSuccessDialog("Demande de paiement envoyée ! Veuillez saisir votre code PIN M-Pesa sur votre téléphone.");
+    } else {
+      _showErrorSnackBar(result['message']);
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  /// Traitement classique Flutterwave original
+  Future<void> _handleFlutterwavePayment(Map<String, dynamic> userData, String address) async {
+    setState(() => _isLoading = true);
+    final String transactionRef = const Uuid().v4(); 
+
+    final Customer customer = Customer(
+      name: userData['name'] ?? "Client MoMart",
+      phoneNumber: userData['phone'] ?? "0000000000",
+      email: userData['email'] ?? "client@momart.com",
+    );
+
+    final Customization customization = Customization(
+      title: "Paiement MoMart",
+      description: "Validation de votre panier",
+      logo: "assets/images/logo2.png",
+    );
+
+    final Flutterwave flutterwave = Flutterwave(
+      publicKey: "FLWPUBK_TEST-XXXXX-X", // ⚠️ À remplacer par ta clé de test
+      currency: "EUR", 
+      amount: widget.cart.totalAmount.toStringAsFixed(2),
+      customer: customer,
+      txRef: transactionRef,
+      customization: customization,
+      paymentOptions: "card, mpesa, airtelmoney", 
+      redirectUrl: "https://www.google.com", 
+      isTestMode: true,
+    );
 
     try {
-      // Récupération de l'adresse utilisateur dans Firestore
+      final ChargeResponse response = await flutterwave.charge(context);
+
+      if (response.status == "success" || response.success == true) {
+        await _saveOrderToFirebase(userData, address, transactionRef, "Flutterwave (Carte / Mobile)");
+        
+        if (!mounted) return;
+        widget.cart.clear(); 
+        _showSuccessDialog("Votre paiement a été validé avec succès !");
+      } else {
+        _showErrorSnackBar("Le paiement a été annulé ou rejeté.");
+      }
+    } catch (error) {
+      debugPrint("Erreur Flutterwave: $error");
+      _showErrorSnackBar("Impossible de finaliser la transaction.");
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _saveOrderToFirebase(Map<String, dynamic> userData, String address, String txRef, String paymentMethod) async {
+    await FirebaseFirestore.instance.collection('orders').add({
+      'amount': widget.cart.totalAmount,
+      'dateTime': DateTime.now().toIso8601String(),
+      'status': 'Payé',
+      'transactionReference': txRef,
+      'paymentMethod': paymentMethod,
+      'customerName': userData['name'] ?? 'Inconnu',
+      'customerEmail': userData['email'] ?? 'Non fourni',
+      'deliveryAddress': address,
+      'products': widget.cart.items.values.map((item) => {
+        'title': item.title,
+        'quantity': item.quantity,
+        'price': item.price,
+      }).toList(),
+    });
+  }
+
+  Future<void> _processOrder() async {
+    try {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc('user_1').get();
       final userData = userDoc.data();
       final String address = (userData != null && userData['address'] != null) 
@@ -159,69 +309,76 @@ class _OrderButtonState extends State<OrderButton> {
 
       if (!userDoc.exists || address == 'Adresse non fournie') {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Veuillez compléter votre adresse dans le profil.'), 
-            backgroundColor: Colors.orange
-          ),
-        );
-        setState(() => _isLoading = false);
+        _showWarningSnackBar('Veuillez renseigner votre adresse dans votre profil.');
         return; 
       }
 
-      // 1. Sauvegarde dans Firestore pour ton suivi admin
-      await FirebaseFirestore.instance.collection('orders').add({
-        'amount': widget.cart.totalAmount,
-        'dateTime': DateTime.now().toIso8601String(),
-        'status': 'En attente',
-        'customerName': userData?['name'] ?? 'Inconnu',
-        'deliveryAddress': address,
-        'products': widget.cart.items.values.map((item) => {
-          'title': item.title,
-          'quantity': item.quantity,
-          'price': item.price,
-        }).toList(),
-      });
+      // Ouvre le menu de sélection du mode de paiement
+      _showPaymentSelection(userData!, address);
 
-      // 2. Lancement de WhatsApp
-      await _sendToWhatsApp(userData, address);
-
-      if (!mounted) return;
-      widget.cart.clear(); // On vide le panier après succès
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Commande validée !')),
-      );
     } catch (error) {
-      debugPrint("Erreur : $error");
+      debugPrint("Erreur Firestore : $error");
     }
+  }
 
-    if (mounted) setState(() => _isLoading = false);
+  void _showErrorSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+  }
+
+  void _showWarningSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.orange));
+  }
+
+  void _showSuccessDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 10),
+            Text("Commande Traitée"),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context); 
+            },
+            child: const Text("Fermer", style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton.icon(
-        // Utilisation de label au lieu de child pour corriger l'erreur ElevatedButton.icon
-        icon: _isLoading 
-          ? const SizedBox(
-              width: 20, 
-              height: 20, 
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-            ) 
-          : const Icon(Icons.send), 
-        label: const Text(
-          'VALIDER ET COMMANDER', 
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
-        ),
+      height: 50, 
+      child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF25D366), // Vert WhatsApp
+          backgroundColor: const Color(0xFFD4AF37), 
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          disabledBackgroundColor: Colors.grey[400],
+          elevation: 0, 
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: (widget.cart.totalAmount <= 0 || _isLoading) ? null : _processOrder,
+        child: _isLoading 
+          ? const SizedBox(
+              width: 24, 
+              height: 24, 
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)
+            ) 
+          : const Text(
+              'Commander', 
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
       ),
     );
   }
