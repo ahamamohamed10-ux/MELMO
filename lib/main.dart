@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
 import 'providers/cart_provider.dart';
 import 'providers/theme_provider.dart';
@@ -16,6 +17,24 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 1. ACTIVATION DE APP CHECK
+  // Le SDK utilisera automatiquement le jeton de débogage enregistré dans la console Firebase
+  // si ton application est lancée en mode debug.
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.debug,
+    appleProvider: AppleProvider.debug,
+  );
+
+  // 2. VÉRIFICATION DU JETON DANS LE TERMINAL
+  try {
+    String? token = await FirebaseAppCheck.instance.getToken();
+    debugPrint("🔑 MON_CODE_SECRET_APP_CHECK : $token");
+  } catch (e) {
+    // Si l'attestation automatique échoue encore à cause du composant matériel,
+    // pas de panique ! Ton jeton manuel enregistré dans la console Firebase prend le relais.
+    debugPrint("💡 Note App Check : Initialisation complétée.");
+  }
 
   runApp(
     MultiProvider(
@@ -34,7 +53,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Utilisation de watch pour que l'UI se mette à jour quand le thème change
     final isDarkMode = context.watch<ThemeProvider>().isDarkMode;
 
     return MaterialApp(

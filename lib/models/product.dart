@@ -16,6 +16,7 @@ class Product {
   final List<String> images;
   final String category; 
   final List<String> colors; // Liste des codes couleurs Hexadécimaux disponibles
+  final List<String> sizes; // Tailles disponibles pour le produit
 
   Product({
     required this.id,
@@ -24,14 +25,15 @@ class Product {
     required this.price,
     required this.images,
     required this.category,
-    this.colors = const [], // Par défaut, pas de couleur imposée (ex: les sprays)
+    this.colors = const [], 
+    this.sizes = const [], // Par défaut, pas de taille imposée
   });
 }
 
 final List<Product> demoProducts = [
   Product(
     id: '1',
-    title: 'BANDANA hack',
+    title: 'Bandana',
     description: 'Enroulé autour du poignet, attaché à l\'anse d\'un sac à main, ou glissé dans une poche arrière.',
     price: 45.99,
     images: [

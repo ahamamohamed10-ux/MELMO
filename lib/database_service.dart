@@ -40,28 +40,27 @@ class DatabaseService {
     return urls;
   }
 
-  // --- MÉTHODE MISE À JOUR AVEC LE PARAMÈTRE COLORS ---
   Future<void> addProduct({
     required String name,
     required double price,
     required String description,
     required List<String> imageUrls,
     required String category,
-    List<String> colors = const [], // <-- AJOUTÉ : Paramètre de liste optionnel (vide par défaut)
+    List<String> colors = const [],
   }) async {
     try {
       await _db.collection('products').add({
-        'title': name,
         'name': name,
         'price': price,
         'description': description,
         'images': imageUrls.isNotEmpty ? imageUrls : ['https://via.placeholder.com/150'],
         'category': category,
-        'colors': colors, // <-- AJOUTÉ : Enregistrement de ta liste de variantes sur Firestore !
+        'colors': colors,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint("Erreur Firestore : $e");
+      throw Exception("Échec de l'enregistrement dans la base de données : $e");
     }
   }
 
