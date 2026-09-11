@@ -13,7 +13,6 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> {
   String _searchQuery = '';
 
-  // Liste de tes collections réelles avec leurs images correspondantes dans tes assets
   final List<Map<String, String>> _collections = [
     {
       'name': 'Women clothing',
@@ -43,7 +42,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Filtrage dynamique des collections selon la saisie dans la barre de recherche
     final filteredCollections = _collections
         .where((collection) => collection['name']!
             .toLowerCase()
@@ -55,7 +53,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. BARRE DE RECHERCHE EN HAUT
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
             child: TextField(
@@ -77,7 +74,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ),
             ),
           ),
-
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 10, 16, 5),
             child: Text(
@@ -97,8 +93,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
             ),
           ),
           const SizedBox(height: 15),
-
-          // 2. GRILLE DES COLLECTIONS FILTRÉES
           Expanded(
             child: filteredCollections.isEmpty
                 ? const Center(
@@ -110,8 +104,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 : GridView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2, // 2 colonnes
-                      childAspectRatio: 0.85, // Ratio largeur/hauteur des cartes
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.85,
                       crossAxisSpacing: 15,
                       mainAxisSpacing: 15,
                     ),
@@ -128,11 +122,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  // Widget pour chaque carte de collection
   Widget _buildCollectionCard(String name, String imagePath) {
     return GestureDetector(
       onTap: () {
-        // Redirection vers l'écran de la collection filtrée
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (ctx) => CollectionProductsScreen(categoryName: name),
@@ -154,7 +146,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
           borderRadius: BorderRadius.circular(15),
           child: Stack(
             children: [
-              // Image de fond de la collection
               Image.asset(
                 imagePath,
                 width: double.infinity,
@@ -165,7 +156,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   child: const Icon(Icons.category, color: Colors.grey, size: 40),
                 ),
               ),
-              // Dégradé sombre pour rendre le texte bien lisible
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -178,7 +168,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ),
                 ),
               ),
-              // Nom de la collection centré en bas
               Positioned(
                 bottom: 15,
                 left: 15,
@@ -225,7 +214,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
 }
 
 // =========================================================================
-// ÉCRAN SECONDAIRE CORRIGÉ : Récupère et transmet désormais le champ colors
+// ÉCRAN SECONDAIRE : Requête filtrée directement sur la collection Firebase
 // =========================================================================
 class CollectionProductsScreen extends StatelessWidget {
   final String categoryName;
@@ -250,7 +239,11 @@ class CollectionProductsScreen extends StatelessWidget {
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('products').snapshots(),
+        // On filtre directement dans Firestore sur le champ 'collection'
+        stream: FirebaseFirestore.instance
+            .collection('products')
+            .where('collection', isEqualTo: categoryName)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(child: Text("Une erreur est survenue"));
@@ -259,11 +252,15 @@ class CollectionProductsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Aucun produit disponible"));
+            return Center(
+              child: Text(
+                "Aucun produit dans la collection $categoryName",
+                style: const TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+            );
           }
 
-          // Filtrage des produits selon la catégorie cliquée
-          final filteredProducts = snapshot.data!.docs.map((doc) {
+          final products = snapshot.data!.docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             var imgs = data['images'];
             List<String> imagesList = imgs is List ? List<String>.from(imgs) : [data['imageUrl'] ?? ''];
@@ -275,24 +272,12 @@ class CollectionProductsScreen extends StatelessWidget {
               price: (data['price'] ?? 0).toDouble(),
               images: imagesList,
               category: data['category'] ?? 'Tout',
-              
-              // =========================================================================
-              // EXTRACTION DU TABLEAU DE COULEURS DEPUIS FIRESTORE
-              // =========================================================================
+              collection: data['collection'] ?? categoryName,
               colors: data['colors'] != null ? List<String>.from(data['colors']) : [],
+              sizes: data['sizes'] != null ? List<String>.from(data['sizes']) : [],
             );
-          }).where((p) => p.category.toLowerCase() == categoryName.toLowerCase()).toList();
+          }).toList();
 
-          if (filteredProducts.isEmpty) {
-            return Center(
-              child: Text(
-                "Aucun produit dans la collection $categoryName",
-                style: const TextStyle(color: Colors.grey, fontSize: 16),
-              ),
-            );
-          }
-
-          // Grille des produits de la collection
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -301,9 +286,9 @@ class CollectionProductsScreen extends StatelessWidget {
               crossAxisSpacing: 15,
               mainAxisSpacing: 15,
             ),
-            itemCount: filteredProducts.length,
+            itemCount: products.length,
             itemBuilder: (ctx, i) {
-              final product = filteredProducts[i];
+              final product = products[i];
               return GestureDetector(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (ctx) => ProductDetailScreen(product: product)),

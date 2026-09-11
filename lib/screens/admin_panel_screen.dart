@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_chat_list_screen.dart';
 import 'add_product_screen.dart';
-import 'admin_orders_screen.dart'; // Tu as déjà ce fichier dans tes dossiers !
+import 'admin_orders_screen.dart';
 
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key});
@@ -43,10 +43,10 @@ class AdminPanelScreen extends StatelessWidget {
               color: Colors.blue,
               destination: const AdminChatListScreen(),
             ),
-            // 2. Bouton Gestion des Commandes
+            // 2. Bouton Gestion des Commandes / Stocks
             _buildMenuCard(
               context,
-              title: "Commandes",
+              title: "Commandes / Stocks",
               icon: Icons.shopping_bag_outlined,
               color: const Color(0xFFD4AF37), // Couleur Or MoMart
               destination: const AdminOrdersScreen(),
@@ -85,7 +85,7 @@ class AdminPanelScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black..withValues(alpha: 0.4),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -102,7 +102,8 @@ class AdminPanelScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
           ],
         ),

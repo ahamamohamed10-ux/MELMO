@@ -28,6 +28,7 @@ class OrderItem {
           price: (item['price'] as num).toDouble(),
           description: '', 
           category: 'Divers',
+          collection: item['collection'] ?? 'Divers',
           images: [], // On utilise la liste vide car ton modèle Product attend 'images'
         );
       }).toList(),
