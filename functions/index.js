@@ -1,87 +1,164 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const axios = require("axios");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { logger } = require("firebase-functions");
+const admin = require("firebase-admin");
 
-// Vos identifiants Daraja (M-Pesa Sandbox)
-const CONSUMER_KEY = "AWUGXBTKAL3mGcA6QwgA3QoBeTnkSs8EQCc0GA4hhnoRr7NE";
-const CONSUMER_SECRET = "rmaetSTpnEK4XBSW4Ohf2SfP7eIEAGYAVwi5muCrthtaLIHDwAI8Nu9QMUN8fxjP";
+// Initialisation sécurisée de Firebase Admin
+if (!admin.apps || admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
-exports.triggerMpesaStkPush = onCall({ cors: true }, async (request) => {
-  // En v2, les données envoyées par Flutter se trouvent dans request.data
-  const rawPhoneNumber = request.data.phoneNumber; // Récupération brute
-  const amount = request.data.amount;             // Montant
+// CONFIGURATION MVOLA
+const MVOLA_CONFIG = {
+  baseUrl: process.env.MVOLA_BASE_URL || "https://sandbox.mvola.mg",
+  consumerKey: process.env.MVOLA_CONSUMER_KEY || "VOTRE_CONSUMER_KEY_SANDBOX",
+  consumerSecret: process.env.MVOLA_CONSUMER_SECRET || "VOTRE_CONSUMER_SECRET_SANDBOX",
+  merchantMsisdn: process.env.MVOLA_MERCHANT_MSISDN || "0343500003",
+  companyName: "MoMart Store",
+  callbackUrl: "https://mvolacallback-rehs2bwcsa-uc.a.run.app",
+  
+};
 
-  if (!rawPhoneNumber || !amount) {
-    throw new HttpsError("invalid-argument", "Le numéro et le montant sont requis.");
+/**
+ * 1. Génération du jeton d'accès OAuth 2.0
+ */
+async function getMvolaAccessToken() {
+  const axios = require("axios");
+  const credentials = Buffer.from(
+    `${MVOLA_CONFIG.consumerKey}:${MVOLA_CONFIG.consumerSecret}`
+  ).toString("base64");
+
+  try {
+    const response = await axios.post(
+      `${MVOLA_CONFIG.baseUrl}/token`,
+      "grant_type=client_credentials&scope=EXT_INT_MVOLA_SCOPE",
+      {
+        headers: {
+          "Authorization": `Basic ${credentials}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        timeout: 10000,
+      }
+    );
+    return response.data.access_token;
+  } catch (error) {
+    logger.error("Erreur Token MVola:", error.response?.data || error.message);
+    throw new HttpsError("internal", "Impossible de générer le jeton de sécurité MVola.");
+  }
+}
+
+/**
+ * 2. Cloud Function Callable pour initier le paiement MVola depuis Flutter
+ */
+exports.mvolaPay = onCall({ cors: true }, async (request) => {
+  const { v4: uuidv4 } = require("uuid");
+  const axios = require("axios");
+
+  const { phoneNumber, amount, description } = request.data;
+
+  if (!phoneNumber || !amount) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Le numéro de téléphone et le montant sont requis."
+    );
   }
 
-  // 🧹 NETTOYAGE ET FORMATAGE DU NUMÉRO DE TÉLÉPHONE
-  let phoneNumber = rawPhoneNumber.replace(/[^0-9]/g, ""); // Enlève les "+" ou espaces
-
-  if (phoneNumber.startsWith("0")) {
-    // Si le numéro commence par 07... ou 01..., on remplace le 0 par 254
-    phoneNumber = "254" + phoneNumber.substring(1);
-  } else if (phoneNumber.startsWith("7") || phoneNumber.startsWith("1")) {
-    // Si l'utilisateur a écrit directement 7... ou 1..., on ajoute 254 devant
-    phoneNumber = "254" + phoneNumber;
+  let formattedPhone = phoneNumber.replace(/\D/g, "");
+  if (formattedPhone.startsWith("261")) {
+    formattedPhone = "0" + formattedPhone.substring(3);
   }
 
   try {
-    // 1. Génération du Token OAuth
-    const auth = Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64");
-    const tokenResponse = await axios.get(
-      "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
-      { headers: { Authorization: `Basic ${auth}` } }
-    );
-    const accessToken = tokenResponse.data.access_token;
+    const accessToken = await getMvolaAccessToken();
+    const clientCorrelationId = uuidv4();
+    const transactionRef = `TX-${Date.now()}`;
 
-    // 2. Préparation du Timestamp à l'heure locale du Kenya (EAT - UTC+3)
-    const now = new Date();
-    const options = { 
-      timeZone: 'Africa/Nairobi', 
-      year: 'numeric', 
-      month: '2-digit', 
-      day: '2-digit', 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit', 
-      hour12: false 
+    const payload = {
+      amount: amount.toString(),
+      currency: "Ar",
+      descriptionText: description || "Paiement commande MoMart",
+      requestDate: new Date().toISOString(),
+      debitParty: [{ key: "msisdn", value: formattedPhone }],
+      creditParty: [{ key: "msisdn", value: MVOLA_CONFIG.merchantMsisdn }],
+      metadata: [
+        { key: "partnerName", value: MVOLA_CONFIG.companyName },
+        { key: "fcTransactionRef", value: transactionRef },
+      ],
     };
-    
-    const formatter = new Intl.DateTimeFormat('en-US', options);
-    const parts = formatter.formatToParts(now);
-    const dateObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-    
-    // Format requis par Safaricom : YYYYMMDDHHMMSS
-    const timestamp = `${dateObj.year}${dateObj.month}${dateObj.day}${dateObj.hour}${dateObj.minute}${dateObj.second}`;
 
-    // 3. Génération du Password requis pour le STK Push
-    const businessShortCode = "174379"; 
-    const passkey = "bfb272f96307a314ebe1a09138d8d366c745b66b26f70164d6533e2b1b861192";
-    const password = Buffer.from(`${businessShortCode}${passkey}${timestamp}`).toString("base64");
+    const headers = {
+      "Authorization": `Bearer ${accessToken}`,
+      "Version": "1.0",
+      "X-CorrelationID": clientCorrelationId,
+      "UserLanguage": "FR",
+      "UserAccountIdentifier": MVOLA_CONFIG.merchantMsisdn,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache",
+      "X-Callback-URL": MVOLA_CONFIG.callbackUrl,
+    };
 
-    // 4. Envoi de la requête STK Push à Safaricom
-    const stkPushResponse = await axios.post(
-      "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
-      {
-        "BusinessShortCode": businessShortCode,
-        "Password": password,
-        "Timestamp": timestamp,
-        "TransactionType": "CustomerPayBillOnline",
-        "Amount": Math.round(amount), // Assure un montant entier (ex: 1)
-        "PartyA": phoneNumber, 
-        "PartyB": businessShortCode,
-        "PhoneNumber": phoneNumber, 
-        "CallBackURL": "https://mydomain.com/callback", 
-        "AccountReference": "MELMO_Store",
-        "TransactionDesc": "Paiement de test e-commerce"
-      },
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+    const response = await axios.post(
+      `${MVOLA_CONFIG.baseUrl}/mvola/mm/transactions/type/m0/1.0.0/`,
+      payload,
+      { headers, timeout: 15000 }
     );
 
-    return { success: true, data: stkPushResponse.data };
+    const resData = response.data;
 
+    await admin.firestore().collection("mvola_transactions").doc(clientCorrelationId).set({
+      transactionRef: transactionRef,
+      serverCorrelationId: resData.serverCorrelationId || null,
+      status: resData.status || "pending",
+      amount: amount,
+      phoneNumber: formattedPhone,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      status: resData.status,
+      serverCorrelationId: resData.serverCorrelationId,
+      clientCorrelationId: clientCorrelationId,
+      message: "Demande de paiement MVola transmise avec succès.",
+    };
   } catch (error) {
-    console.error("Erreur M-Pesa:", error.response ? error.response.data : error.message);
-    throw new HttpsError("internal", "Échec du traitement du paiement M-Pesa.");
+    logger.error("Erreur MVola Pay API:", error.response?.data || error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || "Échec de l'initialisation du paiement MVola.",
+    };
+  }
+});
+
+/**
+ * 3. Webhook Callback pour recevoir la confirmation de transaction envoyée par MVola
+ */
+exports.mvolaCallback = onRequest(async (req, res) => {
+  try {
+    const callbackData = req.body;
+    const correlationId = req.headers["x-correlationid"] || callbackData.serverCorrelationId;
+
+    logger.info("Notification MVola reçue :", callbackData);
+
+    if (correlationId) {
+      const query = await admin
+        .firestore()
+        .collection("orders")
+        .where("transactionReference", "==", correlationId)
+        .get();
+
+      if (!query.empty) {
+        const orderDoc = query.docs[0];
+        await orderDoc.ref.update({
+          status: callbackData.status === "completed" ? "Payé" : "Échoué",
+          mvolaTransactionDetails: callbackData,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    res.status(200).send({ status: "RECEIVED" });
+  } catch (err) {
+    logger.error("Erreur traitement Webhook MVola:", err);
+    res.status(500).send("Internal Server Error");
   }
 });

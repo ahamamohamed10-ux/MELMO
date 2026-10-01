@@ -65,6 +65,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _sizesController.dispose();
     _shippingFeeController.dispose();
     _deliveryTimeController.dispose();
+
     super.dispose();
   }
 
@@ -115,6 +116,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         sizes: parsingSizes,
         shippingFee: double.tryParse(_shippingFeeController.text) ?? 0.0,
         deliveryTime: _deliveryTimeController.text.trim(),
+        
       );
 
       if (!mounted) return;

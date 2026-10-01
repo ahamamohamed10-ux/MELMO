@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
+
 import 'providers/cart_provider.dart';
 import 'providers/theme_provider.dart';
-import 'providers/navigation_provider.dart'; // <-- 1. AJOUTE CET IMPORT
+import 'providers/navigation_provider.dart';
+
 import 'screens/home_screen.dart'; 
 import 'screens/auth_screen.dart';
 import 'screens/admin_panel_screen.dart';
+import 'screens/delivery/delivery_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +23,6 @@ void main() async {
   );
 
   // 1. ACTIVATION DE APP CHECK
-  // Le SDK utilisera automatiquement le jeton de débogage enregistré dans la console Firebase
-  // si ton application est lancée en mode debug.
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug,
     appleProvider: AppleProvider.debug,
@@ -31,8 +33,6 @@ void main() async {
     String? token = await FirebaseAppCheck.instance.getToken();
     debugPrint("🔑 MON_CODE_SECRET_APP_CHECK : $token");
   } catch (e) {
-    // Si l'attestation automatique échoue encore à cause du composant matériel,
-    // pas de panique ! Ton jeton manuel enregistré dans la console Firebase prend le relais.
     debugPrint("💡 Note App Check : Initialisation complétée.");
   }
 
@@ -41,7 +41,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (ctx) => CartProvider()),
         ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
-        ChangeNotifierProvider(create: (ctx) => NavigationProvider()), // <-- 2. AJOUTE-LE ICI
+        ChangeNotifierProvider(create: (ctx) => NavigationProvider()),
       ],
       child: const MyApp(),
     ),
@@ -74,30 +74,59 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFD4AF37), 
-          brightness: Brightness.dark
+          brightness: Brightness.dark,
         ),
       ),
       
+      // Gestion du routage basé sur les rôles Firestore
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (ctx, userSnapshot) {
           if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
+              body: Center(
+                child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
+              ),
             );
           }
           
           if (userSnapshot.hasData) {
             final user = userSnapshot.data!;
-            
-            if (user.email == 'ahamamohamed10@gmail.com') {
-              return const AdminPanelScreen(); 
-            } else {
-              return const HomeScreen(); 
-            }
+
+            return StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (ctx, userDocSnapshot) {
+                if (userDocSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
+                    ),
+                  );
+                }
+
+                if (userDocSnapshot.hasData && userDocSnapshot.data!.exists) {
+                  final userData = userDocSnapshot.data!.data() as Map<String, dynamic>?;
+                  final role = userData?['role'] ?? 'client';
+
+                  // Redirection selon le rôle enregistré dans Firestore
+                  if (role == 'admin') {
+                    return const AdminPanelScreen();
+                  }
+                  
+                  if (role == 'delivery') {
+                    return const DeliveryHomeScreen();
+                  }
+                }
+
+                return const HomeScreen(); // Par défaut : Interface Client
+              },
+            );
           }
           
-          return const AuthScreen(); 
+          return const AuthScreen(); // Utilisateur non connecté
         },
       ),
     );

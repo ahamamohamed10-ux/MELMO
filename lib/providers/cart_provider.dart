@@ -2,14 +2,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Modèle interne pour le panier mis à jour avec les couleurs
+/// Modèle représentant un article du panier avec gestion des variantes (couleurs)
 class CartItemData {
-  final String id; // ID unique de la ligne (productId_selectedColor)
+  final String id; // ID unique de la ligne (ex: productId_selectedColor)
   final String title;
   final String imageUrl;
   final double price;
   final int quantity;
-  final String selectedColor; // <-- AJOUTÉ : Sauvegarde de la couleur hexadécimale
+  final String selectedColor; // Code hexadécimal ou nom de la couleur
 
   CartItemData({
     required this.id,
@@ -17,7 +17,7 @@ class CartItemData {
     required this.imageUrl,
     required this.price,
     required this.quantity,
-    required this.selectedColor, // <-- Requis
+    required this.selectedColor,
   });
 
   Map<String, dynamic> toJson() => {
@@ -26,16 +26,16 @@ class CartItemData {
         'imageUrl': imageUrl,
         'price': price,
         'quantity': quantity,
-        'selectedColor': selectedColor, // <-- Sauvegarde dans SharedPreferences
+        'selectedColor': selectedColor,
       };
 
   factory CartItemData.fromJson(Map<String, dynamic> json) => CartItemData(
-        id: json['id'],
+        id: json['id'] ?? '',
         title: json['title'] ?? '',
         imageUrl: json['imageUrl'] ?? '',
-        price: (json['price'] as num).toDouble(),
-        quantity: json['quantity'],
-        selectedColor: json['selectedColor'] ?? 'Standard', // Valeur par défaut si absent
+        price: (json['price'] as num?)?.toDouble() ?? 0.0,
+        quantity: json['quantity'] ?? 1,
+        selectedColor: json['selectedColor'] ?? 'Standard',
       );
 }
 
@@ -48,6 +48,7 @@ class CartProvider with ChangeNotifier {
     _loadCartData();
   }
 
+  /// Calcul du montant total du panier
   double get totalAmount {
     double total = 0.0;
     _items.forEach((id, cartItem) {
@@ -56,7 +57,17 @@ class CartProvider with ChangeNotifier {
     return total;
   }
 
+  /// Nombre de lignes différentes dans le panier
   int get itemCount => _items.length;
+
+  /// Nombre total d'unités d'articles (somme des quantités)
+  int get totalItemCount {
+    int count = 0;
+    _items.forEach((key, item) {
+      count += item.quantity;
+    });
+    return count;
+  }
 
   // --- SAUVEGARDE EN LOCAL ---
   Future<void> _saveCartData() async {
@@ -76,32 +87,35 @@ class CartProvider with ChangeNotifier {
 
     final savedCart = prefs.getString('user_cart');
     if (savedCart != null) {
-      Map<String, dynamic> decoded = json.decode(savedCart);
-      _items = decoded.map(
-          (key, value) => MapEntry(key, CartItemData.fromJson(value)));
-      notifyListeners();
+      try {
+        Map<String, dynamic> decoded = json.decode(savedCart);
+        _items = decoded.map(
+          (key, value) => MapEntry(key, CartItemData.fromJson(value)),
+        );
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Erreur lors du chargement du panier local : $e');
+      }
     }
   }
 
-  // --- AJOUT D'UN ARTICLE MODIFIÉ AVEC LA COULEUR ---
+  // --- AJOUT D'UN ARTICLE AVEC COULEUR ---
   void addItem(String productId, double price, String title, String imageUrl, String colorHex) {
-    // Génération d'une clé unique combinant l'article et sa variante couleur
     final String cartItemId = "${productId}_$colorHex";
 
     if (_items.containsKey(cartItemId)) {
-      // Si la même variante de couleur existe, on incrémente
       _items.update(
-          cartItemId,
-          (existing) => CartItemData(
-                id: existing.id,
-                title: existing.title,
-                imageUrl: existing.imageUrl,
-                price: existing.price,
-                quantity: existing.quantity + 1,
-                selectedColor: existing.selectedColor,
-              ));
+        cartItemId,
+        (existing) => CartItemData(
+          id: existing.id,
+          title: existing.title,
+          imageUrl: existing.imageUrl,
+          price: existing.price,
+          quantity: existing.quantity + 1,
+          selectedColor: existing.selectedColor,
+        ),
+      );
     } else {
-      // Sinon, on crée une nouvelle ligne distincte pour cette couleur
       _items[cartItemId] = CartItemData(
         id: cartItemId,
         title: title,
@@ -115,32 +129,31 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- INCREMENTATION VIA L'ID DE LIGNE UNIQUE ---
+  // --- INCRÉMENTATION DE LA QUANTITÉ ---
   void incrementQuantity(String cartItemId) {
     if (_items.containsKey(cartItemId)) {
       final item = _items[cartItemId]!;
-      // Extraction de l'ID produit d'origine (ce qui se trouve avant le '_')
       final productId = cartItemId.split('_')[0];
-      
       addItem(productId, item.price, item.title, item.imageUrl, item.selectedColor);
     }
   }
 
-  // --- DECREMENTATION ---
+  // --- DÉCRÉMENTATION DE LA QUANTITÉ ---
   void decrementQuantity(String cartItemId) {
     if (!_items.containsKey(cartItemId)) return;
-    
+
     if (_items[cartItemId]!.quantity > 1) {
       _items.update(
-          cartItemId,
-          (existing) => CartItemData(
-                id: existing.id,
-                title: existing.title,
-                imageUrl: existing.imageUrl,
-                price: existing.price,
-                quantity: existing.quantity - 1,
-                selectedColor: existing.selectedColor,
-              ));
+        cartItemId,
+        (existing) => CartItemData(
+          id: existing.id,
+          title: existing.title,
+          imageUrl: existing.imageUrl,
+          price: existing.price,
+          quantity: existing.quantity - 1,
+          selectedColor: existing.selectedColor,
+        ),
+      );
     } else {
       _items.remove(cartItemId);
     }
@@ -148,7 +161,7 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- SUPPRESSION ---
+  // --- SUPPRESSION D'UNE LIGNE DU PANIER ---
   void removeItem(String cartItemId) {
     _items.remove(cartItemId);
     _saveCartData();
@@ -156,9 +169,10 @@ class CartProvider with ChangeNotifier {
   }
 
   // --- VIDER LE PANIER ---
-  void clear() {
+  Future<void> clear() async {
     _items.clear();
-    _saveCartData();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_cart');
     notifyListeners();
   }
 }

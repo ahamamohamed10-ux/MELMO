@@ -698,7 +698,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => const CheckoutScreen(),
+                      builder: (context) => CheckoutScreen(
+                        cart: Provider.of<CartProvider>(context, listen: false),
+                      ),
                     ),
                   );
                 },
